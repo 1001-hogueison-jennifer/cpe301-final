@@ -3,6 +3,7 @@ CPE 301 ~ Final Project
 
 Team members:
     Jennifer Hogueison
+    Enekoitz Irujo
 
 Requirements:
     Create an evaporation cooling system
@@ -85,6 +86,7 @@ Requirements:
             - Make public before submitting
             - Include link on Canvas
             - Comments should be professional and meaningful, no "asdf" commit comments
+            - Commits will be reviewed and assessed based on contributions from *all* team members
 
 */
 
@@ -117,7 +119,7 @@ volatile unsigned char  *TCCR1A     = (unsigned char*)  0x80;
 volatile unsigned char  *TCCR1B     = (unsigned char*)  0x81;
 volatile unsigned char  *TCCR1C     = (unsigned char*)  0x82;
 volatile unsigned int   *TCNT1      = (unsigned int*)   0x84;
-    //pins
+    //GPIO
 volatile unsigned char  *PINB       = (unsigned char*)  0x23;
 volatile unsigned char  *DDRB       = (unsigned char*)  0x24;
 volatile unsigned char  *PORTB      = (unsigned char*)  0x25;
@@ -127,7 +129,7 @@ volatile unsigned char  *PORTB      = (unsigned char*)  0x25;
 int state = DISABLED;
 unsigned long FCPU = 16000000;          //CPU frequency of ATMEGA is 16 MHz
 double clk_period = 0.0000000625;       //Period of 1 clock cycle for CPU
-unsigned int timer_maxticks = 65536;    //set TCNT1 to this - how many ticks you need
+unsigned int timer_maxticks = 65536;    //set TCNT1 to (this - ticks needed)
 
 
 //Function prototypes
@@ -163,7 +165,7 @@ void loop() {
 */
 void U0init( int U0baud ) {
     unsigned int tbaud;
-    tbaud = (FCPU / (16 * U0baud)) - 1;
+    tbaud = (FCPU / 16 / U0baud - 1);
     *UCSR0A = 0x20;     //set 7:0 to 00100000
     *UCSR0B = 0x18;     //set 7:0 to 00011000
     *UCSR0C = 0x06;     //set 7:0 to 00000110
