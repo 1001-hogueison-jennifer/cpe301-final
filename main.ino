@@ -129,7 +129,8 @@ volatile unsigned char  *PORTB      = (unsigned char*)  0x25;
 int state = DISABLED;
 unsigned long FCPU = 16000000;          //CPU frequency of ATMEGA is 16 MHz
 double clk_period = 0.0000000625;       //Period of 1 clock cycle for CPU
-unsigned int timer_maxticks = 65536;    //set TCNT1 to (this - ticks needed)
+unsigned int currentTicks = 65535;      //set TCNT1 to (this - ticks needed)
+unsigned char timer_running = 0;
 
 
 //Function prototypes
@@ -142,13 +143,16 @@ void U0putchar( unsigned char U0pdata );
 void adc_init();
 unsigned int adc_read( unsigned char adc_channel_num );
     //timer
-void timer_reset();
+void timer_setup();
+void timer_start( unsigned int ticks );
+void timer_stop();
 
 
 //Arduino init function
 void setup() {
-    U0init(9600);       //initialize serial
     adc_init();         //initialize ADC
+    timer_setup();
+    U0init(9600);       //initialize serial
 }
 
 //Arduino loop function
@@ -280,12 +284,58 @@ unsigned int adc_read( unsigned char adc_channel_num ) {
 }
 
 /*
-    timer_reset()
+    void timer_setup();
+    Initializes registers to use the timer with interrupts
+*/
+void timer_setup() {
+    *TCCR1A = 0x00;
+    *TCCR1B = 0x00;
+    *TCCR1C = 0x00;
+    *TIFR1 |= 0x01;
+    *TIMSK1 |= 0x01;
+}
+
+/*
+    void timer_start( unsigned int ticks );
+    Starts the timer for the specified number of ticks
+*/
+void timer_start( unsigned int ticks ) {
+    currentTicks = (unsigned int) ticks;
+    *TCCR1B &= 0xF8;            //stop current timer
+    *TCNT1 = (unsigned int) (65535 - (unsigned long) (currentTicks) );
+    *TCCR1C &= 0x1F;
+    *TCCR1B |= 0x01;            //start timer
+    timer_running = 1;
+}
+
+/*
+    void timer_stop();
     Stops the timer and resets any overflow state
 */
-void timer_reset() {
+void timer_stop() {
     *TCCR1B &= 0xF8;
     if ( ( *TIFR1 & 0x01 ) == 1 ) {
         *TIFR1 |= 0x01;
     }
+    timer_running = 0;
+    currentTicks = 65535;
+}
+
+
+//Interrupt service routines
+
+/*
+    ISR( TIMER1_OVF_vect );
+    Timer overflow interrupt service routine.
+    Uses an Arduino library function, so may appear as errored in VSCode
+*/
+ISR( TIMER1_OVF_vect ) {
+    *TCCR1B &= 0xF8;          //stop current timer
+
+    // from lab 8, performs timer restart for currentTicks. change as needed.
+    *TCNT1 = (unsigned int) (65535 - (unsigned long) (currentTicks) );
+    *TCCR1C &= 0x1F;
+    *TCCR1B |= 0x01;
+    
+    // add functions to perform when timer overflows here
 }
