@@ -104,6 +104,7 @@ Requirements:
 //Library includes
 #include <LiquidCrystal.h>
 #include <Keypad.h>
+#include <RTClib.h>
 
 //Initialize macro definitions
 #define DISABLED 0
@@ -133,7 +134,7 @@ volatile unsigned char  *TCCR1A     = (unsigned char*)  0x80;
 volatile unsigned char  *TCCR1B     = (unsigned char*)  0x81;
 volatile unsigned char  *TCCR1C     = (unsigned char*)  0x82;
 volatile unsigned int   *TCNT1      = (unsigned int*)   0x84;
-    //GPIO
+    //pins
 volatile unsigned char  *PINB       = (unsigned char*)  0x23;
 volatile unsigned char  *DDRB       = (unsigned char*)  0x24;
 volatile unsigned char  *PORTB      = (unsigned char*)  0x25;
@@ -162,7 +163,9 @@ int lcd_x_min = 0;
 int lcd_x_max = 15;
 int lcd_y_min = 0;
 int lcd_y_max = 1;
-
+    //RTC
+RTC_DS3231 rtc;
+char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 //Function prototypes
     //serial
@@ -177,14 +180,17 @@ unsigned int adc_read( unsigned char adc_channel_num );
 void timer_setup();
 void timer_start( unsigned int ticks );
 void timer_stop();
+    //RTC
+void time_to_serial();
 
 
 //Arduino init function
 void setup() {
-    adc_init();         //initialize ADC
-    timer_setup();
-    U0init(9600);       //initialize serial
-    lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );
+    adc_init();                                 //initialize ADC
+    timer_setup();                              //initialize timer
+    U0init(9600);                               //initialize serial
+    lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );  //initialize LCD
+    rtc.begin();                                //initialize RTC
 }
 
 //Arduino loop function
@@ -353,6 +359,19 @@ void timer_stop() {
     currentTicks = 65535;
 }
 
+/*
+    void time_to_serial()
+    Prints a string containing the current timestamp to the serial monitor one character at a time
+*/
+void time_to_serial() {
+    DateTime now = rtc.now();
+    int len = 25;
+    char date_string[len];    
+    date_string = now.toString( "DDD, DD MMM YYYY hh:mm:ss" );
+    for (int i = 0; i < len; i++) {
+        U0putchar( date_string[i] );
+    }
+}
 
 
 //Interrupt service routines
@@ -360,7 +379,6 @@ void timer_stop() {
 /*
     ISR( TIMER1_OVF_vect );
     Timer overflow interrupt service routine.
-    Uses an Arduino library function, so may appear as errored in VSCode
 */
 ISR( TIMER1_OVF_vect ) {
     *TCCR1B &= 0xF8;          //stop current timer
