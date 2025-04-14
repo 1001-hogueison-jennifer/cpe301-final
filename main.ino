@@ -74,7 +74,7 @@ Requirements:
         Final report:
             - Detailed description of project including components, states, & functionalities
             - Details and descriptions of every component's functionality
-            - System overview with any constraints like operating temperature, power requirements, etc.
+            - System overview with any constraints like operating temperature, power reqs, etc.
             - Circuit image
             - Schematic diagram of circuit
             - System demonstration images
@@ -86,16 +86,31 @@ Requirements:
             - Make public before submitting
             - Include link on Canvas
             - Comments should be professional and meaningful, no "asdf" commit comments
-            - Commits will be reviewed and assessed based on contributions from *all* team members
+            - Commits will be reviewed and assessed based on contributions from *all* members
 
+    ADDED:
+        Timer functions
+        Serial functions
+        LCD handling
+        ADC and water level functions
+    NEED
+        Air temperature and humidity
+        Fan motor functions
+        Vent stepper motor functions
+        RTC module functions
+        Main
 */
+
+//Library includes
+#include <LiquidCrystal.h>
+#include <Keypad.h>
+#include <RTClib.h>
 
 //Initialize macro definitions
 #define DISABLED 0
 #define IDLE 1
 #define RUNNING 2
 #define ERROR 3
-
 #define RDA 0x80
 #define TBE 0x20
 
@@ -119,7 +134,7 @@ volatile unsigned char  *TCCR1A     = (unsigned char*)  0x80;
 volatile unsigned char  *TCCR1B     = (unsigned char*)  0x81;
 volatile unsigned char  *TCCR1C     = (unsigned char*)  0x82;
 volatile unsigned int   *TCNT1      = (unsigned int*)   0x84;
-    //GPIO
+    //pins
 volatile unsigned char  *PINB       = (unsigned char*)  0x23;
 volatile unsigned char  *DDRB       = (unsigned char*)  0x24;
 volatile unsigned char  *PORTB      = (unsigned char*)  0x25;
@@ -133,11 +148,30 @@ volatile unsigned char  *pin_v      = (unsigned char*)  0x2A;
 
 //Initialize global variables
 int state = DISABLED;
+    //timer
 unsigned long FCPU = 16000000;          //CPU frequency of ATMEGA is 16 MHz
 double clk_period = 0.0000000625;       //Period of 1 clock cycle for CPU
 unsigned int currentTicks = 65535;      //set TCNT1 to (this - ticks needed)
 unsigned char timer_running = 0;
-
+    //LCD
+int right = 0;
+int up = 0;
+int dir1 = 0;
+int dir2 = 0;
+const int RS = 11;
+const int EN = 12;
+const int D4 = 2;
+const int D5 = 3;
+const int D6 = 4;
+const int D7 = 5;
+LiquidCrystal lcd( RS, EN, D4, D5, D6, D7 );
+int lcd_x_min = 0;
+int lcd_x_max = 15;
+int lcd_y_min = 0;
+int lcd_y_max = 1;
+    //RTC
+RTC_DS3231 rtc;
+char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
 //Function prototypes
     //serial
@@ -152,18 +186,22 @@ unsigned int adc_read( unsigned char adc_channel_num );
 void timer_setup();
 void timer_start( unsigned int ticks );
 void timer_stop();
+    //RTC
+void time_to_serial();
 
 
 //Arduino init function
 void setup() {
-    adc_init();         //initialize ADC
-    timer_setup();
-    U0init(9600);       //initialize serial
+    adc_init();                                 //initialize ADC
+    timer_setup();                              //initialize timer
+    U0init(9600);                               //initialize serial
 
     //set vent button pin to INPUT
     *ddr_k &= 0xFB;
     //enable pull-up resistor on vent button
     *port_k |= 0x04;
+    lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );  //initialize LCD
+    rtc.begin();                                //initialize RTC
 }
 
 //Arduino loop function
@@ -338,13 +376,26 @@ void timer_stop() {
     currentTicks = 65535;
 }
 
+/*
+    void time_to_serial()
+    Prints a string containing the current timestamp to the serial monitor one character at a time
+*/
+void time_to_serial() {
+    DateTime now = rtc.now();
+    int len = 25;
+    char date_string[len];    
+    date_string = now.toString( "DDD, DD MMM YYYY hh:mm:ss" );
+    for (int i = 0; i < len; i++) {
+        U0putchar( date_string[i] );
+    }
+}
+
 
 //Interrupt service routines
 
 /*
     ISR( TIMER1_OVF_vect );
     Timer overflow interrupt service routine.
-    Uses an Arduino library function, so may appear as errored in VSCode
 */
 ISR( TIMER1_OVF_vect ) {
     *TCCR1B &= 0xF8;          //stop current timer
