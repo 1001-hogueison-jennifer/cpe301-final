@@ -123,7 +123,13 @@ volatile unsigned int   *TCNT1      = (unsigned int*)   0x84;
 volatile unsigned char  *PINB       = (unsigned char*)  0x23;
 volatile unsigned char  *DDRB       = (unsigned char*)  0x24;
 volatile unsigned char  *PORTB      = (unsigned char*)  0x25;
-
+    //Vent
+volatile unsigned char  *port_b     = (unsigned char*)  0x108;
+volatile unsigned char  *ddr_b      = (unsigned char*)  0x107;
+volatile unsigned char  *pin_b      = (unsigned char*)  0x106;
+volatile unsigned char  *port_v     = (unsigned char*)  0x2C;
+volatile unsigned char  *ddr_v      = (unsigned char*)  0x2B;
+volatile unsigned char  *pin_v      = (unsigned char*)  0x2A;
 
 //Initialize global variables
 int state = DISABLED;
@@ -153,10 +159,21 @@ void setup() {
     adc_init();         //initialize ADC
     timer_setup();
     U0init(9600);       //initialize serial
+
+    //set vent button pin to INPUT
+    *ddr_k &= 0xFB;
+    //enable pull-up resistor on vent button
+    *port_k |= 0x04;
 }
 
 //Arduino loop function
 void loop() {
+
+    // vent moving loop
+    if (*pin_k & 0x04) {
+        //if vent button's pin is high
+        
+    }
 
 }
 
@@ -339,3 +356,7 @@ ISR( TIMER1_OVF_vect ) {
     
     // add functions to perform when timer overflows here
 }
+
+
+
+
