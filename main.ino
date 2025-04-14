@@ -74,7 +74,7 @@ Requirements:
         Final report:
             - Detailed description of project including components, states, & functionalities
             - Details and descriptions of every component's functionality
-            - System overview with any constraints like operating temperature, power requirements, etc.
+            - System overview with any constraints like operating temperature, power reqs, etc.
             - Circuit image
             - Schematic diagram of circuit
             - System demonstration images
@@ -86,16 +86,30 @@ Requirements:
             - Make public before submitting
             - Include link on Canvas
             - Comments should be professional and meaningful, no "asdf" commit comments
-            - Commits will be reviewed and assessed based on contributions from *all* team members
+            - Commits will be reviewed and assessed based on contributions from *all* members
 
+    ADDED:
+        Timer functions
+        Serial functions
+        LCD handling
+        ADC and water level functions
+    NEED
+        Air temperature and humidity
+        Fan motor functions
+        Vent stepper motor functions
+        RTC module functions
+        Main
 */
+
+//Library includes
+#include <LiquidCrystal.h>
+#include <Keypad.h>
 
 //Initialize macro definitions
 #define DISABLED 0
 #define IDLE 1
 #define RUNNING 2
 #define ERROR 3
-
 #define RDA 0x80
 #define TBE 0x20
 
@@ -127,10 +141,27 @@ volatile unsigned char  *PORTB      = (unsigned char*)  0x25;
 
 //Initialize global variables
 int state = DISABLED;
+    //timer
 unsigned long FCPU = 16000000;          //CPU frequency of ATMEGA is 16 MHz
 double clk_period = 0.0000000625;       //Period of 1 clock cycle for CPU
 unsigned int currentTicks = 65535;      //set TCNT1 to (this - ticks needed)
 unsigned char timer_running = 0;
+    //LCD
+int right = 0;
+int up = 0;
+int dir1 = 0;
+int dir2 = 0;
+const int RS = 11;
+const int EN = 12;
+const int D4 = 2;
+const int D5 = 3;
+const int D6 = 4;
+const int D7 = 5;
+LiquidCrystal lcd( RS, EN, D4, D5, D6, D7 );
+int lcd_x_min = 0;
+int lcd_x_max = 15;
+int lcd_y_min = 0;
+int lcd_y_max = 1;
 
 
 //Function prototypes
@@ -153,6 +184,7 @@ void setup() {
     adc_init();         //initialize ADC
     timer_setup();
     U0init(9600);       //initialize serial
+    lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );
 }
 
 //Arduino loop function
@@ -320,6 +352,7 @@ void timer_stop() {
     timer_running = 0;
     currentTicks = 65535;
 }
+
 
 
 //Interrupt service routines
