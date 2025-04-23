@@ -92,12 +92,12 @@ Requirements:
         Timer functions
         Serial functions
         LCD handling
+        RTC module functions
         ADC and water level functions
     NEED
         Air temperature and humidity
         Fan motor functions
         Vent stepper motor functions
-        RTC module functions
         Main
 */
 
@@ -105,6 +105,7 @@ Requirements:
 #include <LiquidCrystal.h>
 #include <Keypad.h>
 #include <RTClib.h>
+#include <DHT.h>
 
 //Initialize macro definitions
 #define DISABLED 0
@@ -113,6 +114,7 @@ Requirements:
 #define ERROR 3
 #define RDA 0x80
 #define TBE 0x20
+#define DHT11_PIN 2
 
 
 //Initialize global registers
@@ -139,9 +141,9 @@ volatile unsigned char  *PINB       = (unsigned char*)  0x23;
 volatile unsigned char  *DDRB       = (unsigned char*)  0x24;
 volatile unsigned char  *PORTB      = (unsigned char*)  0x25;
     //Vent
-volatile unsigned char  *port_b     = (unsigned char*)  0x108;
-volatile unsigned char  *ddr_b      = (unsigned char*)  0x107;
-volatile unsigned char  *pin_b      = (unsigned char*)  0x106;
+volatile unsigned char  *port_k     = (unsigned char*)  0x108;
+volatile unsigned char  *ddr_k      = (unsigned char*)  0x107;
+volatile unsigned char  *pin_k      = (unsigned char*)  0x106;
 volatile unsigned char  *port_v     = (unsigned char*)  0x2C;
 volatile unsigned char  *ddr_v      = (unsigned char*)  0x2B;
 volatile unsigned char  *pin_v      = (unsigned char*)  0x2A;
@@ -172,6 +174,15 @@ int lcd_y_max = 1;
     //RTC
 RTC_DS3231 rtc;
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+    //humidity/temp sensor
+DHT dht11( DHT11_PIN, DHT11 );
+const long interval = 60000;        //60 second interval for humidity sensor
+unsigned long previous_millis = 0;
+float humidity = 0.0;
+float temperature = 0.0;
+    //fan
+float temperature_threshold = 25.0;
+int water_low_threshold = 100;
 
 //Function prototypes
     //serial
@@ -186,8 +197,12 @@ unsigned int adc_read( unsigned char adc_channel_num );
 void timer_setup();
 void timer_start( unsigned int ticks );
 void timer_stop();
+    //LCD
+void display_update();
     //RTC
 void time_to_serial();
+    //DHT11
+void readHumiTemp( float* humi, float* temp );
 
 
 //Arduino init function
@@ -200,12 +215,21 @@ void setup() {
     *ddr_k &= 0xFB;
     //enable pull-up resistor on vent button
     *port_k |= 0x04;
+
     lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );  //initialize LCD
     rtc.begin();                                //initialize RTC
+    dht11.begin();                              //initialize DHT11
 }
 
 //Arduino loop function
 void loop() {
+    unsigned long current_millis = millis();
+    if ( current_millis - previous_millis >= interval ) {
+        previous_millis = current_millis;
+        if ( state != DISABLED ) {
+            readHumiTemp( &humidity, &temperature );
+        }
+    }
 
     // vent moving loop
     if (*pin_k & 0x04) {
@@ -213,6 +237,8 @@ void loop() {
         
     }
 
+    //update display
+    display_update();
 }
 
 
@@ -382,11 +408,48 @@ void timer_stop() {
 */
 void time_to_serial() {
     DateTime now = rtc.now();
-    int len = 25;
-    char date_string[len];    
-    date_string = now.toString( "DDD, DD MMM YYYY hh:mm:ss" );
+    char date_string[] = now.toString( "DDD, DD MMM YYYY hh:mm:ss" );
+    int n = sizeof( date_string ) / sizeof( date_string[0] );
     for (int i = 0; i < len; i++) {
         U0putchar( date_string[i] );
+    }
+}
+
+/*
+    void display_update()
+    Clears the LCD display and redraws information on it
+*/
+void display_update() {
+    lcd.clear();
+    //place any items that need to be displayed on the LCD here
+    if ( state != DISABLED && state != ERROR ) {
+        lcd.setCursor( 0, 0 );
+        lcd.print( "T: " );
+        lcd.print( temperature );
+        lcd.print( " H: " );
+        lcd.print( humidity );
+    }
+    if ( state == ERROR ) {
+        lcd.setCursor( 0, 0 );
+        lcd.print( "Water level is" );
+        lcd.setCursor( 0, 1 );
+        lcd.print( "too low. ");
+    }
+}
+
+/*
+    void readHumidity( float* humi, float* temp )
+    Reads the current humidity and temperature and passes them back by reference
+*/
+void readHumiTemp( float* humi, float* temp ) {
+    *humi = dht11.readHumidity();
+    *temp = dht11.readTemperature();
+    if ( isnan(*humi) || isnan(*temp) ) {
+        char message[] = "Could not read from DHT11 sensor\n";
+        int n = sizeof( message ) / sizeof( message[0] );
+        for( int i = 0; i < n; i++ ) {
+            U0putchar( message[i] );
+        }
     }
 }
 
@@ -407,7 +470,3 @@ ISR( TIMER1_OVF_vect ) {
     
     // add functions to perform when timer overflows here
 }
-
-
-
-
