@@ -114,39 +114,48 @@ Requirements:
 #define ERROR 3
 #define RDA 0x80
 #define TBE 0x20
-#define DHT11_PIN 2
+#define DHT11_PIN 10
 
 
 //Initialize global registers
     //serial
-volatile unsigned char  *UCSR0A     = (unsigned char *) 0x00C0;
-volatile unsigned char  *UCSR0B     = (unsigned char *) 0x00C1;
-volatile unsigned char  *UCSR0C     = (unsigned char *) 0x00C2;
-volatile unsigned int   *UBRR0      = (unsigned int *)  0x00C4;
-volatile unsigned char  *UDR0       = (unsigned char *) 0x00C6;
+volatile unsigned char  *UCSR0A     = (unsigned char *) 0xC0;   //USB, no pin-out
+volatile unsigned char  *UCSR0B     = (unsigned char *) 0xC1;
+volatile unsigned char  *UCSR0C     = (unsigned char *) 0xC2;
+volatile unsigned int   *UBRR0      = (unsigned int *)  0xC4;
+volatile unsigned char  *UDR0       = (unsigned char *) 0xC6;
     //ADC
-volatile unsigned char  *ADMUX      = (unsigned char*)  0x7C;
+volatile unsigned char  *ADMUX      = (unsigned char*)  0x7C;   //port f:0 (pin A0)
 volatile unsigned char  *ADCSRB     = (unsigned char*)  0x7B;
 volatile unsigned char  *ADCSRA     = (unsigned char*)  0x7A;
 volatile unsigned int   *ADC_DATA   = (unsigned int*)   0x78;
     //timer
-volatile unsigned char  *TIFR1      = (unsigned char*)  0x36;
+volatile unsigned char  *TIFR1      = (unsigned char*)  0x36;   //no pin-out
 volatile unsigned char  *TIMSK1     = (unsigned char*)  0x6F;
 volatile unsigned char  *TCCR1A     = (unsigned char*)  0x80;
 volatile unsigned char  *TCCR1B     = (unsigned char*)  0x81;
 volatile unsigned char  *TCCR1C     = (unsigned char*)  0x82;
 volatile unsigned int   *TCNT1      = (unsigned int*)   0x84;
-    //pins
-volatile unsigned char  *PINB       = (unsigned char*)  0x23;
-volatile unsigned char  *DDRB       = (unsigned char*)  0x24;
-volatile unsigned char  *PORTB      = (unsigned char*)  0x25;
     //Vent
-volatile unsigned char  *port_k     = (unsigned char*)  0x108;
-volatile unsigned char  *ddr_k      = (unsigned char*)  0x107;
-volatile unsigned char  *pin_k      = (unsigned char*)  0x106;
-volatile unsigned char  *port_v     = (unsigned char*)  0x2C;
-volatile unsigned char  *ddr_v      = (unsigned char*)  0x2B;
-volatile unsigned char  *pin_v      = (unsigned char*)  0x2A;
+volatile unsigned char  *PORTH      = (unsigned char*)  0x102;  //digital 6 - 9 (port h:3-6)
+volatile unsigned char  *DDRH       = (unsigned char*)  0x101;  //uses library
+volatile unsigned char  *PINH       = (unsigned char*)  0x100;
+volatile unsigned char  *PORTC      = (unsigned char*)  0x28;   //stepper motor buttons:
+volatile unsigned char  *DDRC       = (unsigned char*)  0x27;       //digital 37 (port c:0) 
+volatile unsigned char  *PINC       = (unsigned char*)  0x26;       //digital 36 (port c:1)
+    //Motor
+volatile unsigned char  *PORTL      = (unsigned char*)  0x10B;  //motor: digital 49 (port l:0)
+volatile unsigned char  *DDRL       = (unsigned char*)  0x10A;
+volatile unsigned char  *PINL       = (unsigned char*)  0x109;
+    //buttons and LEDs
+volatile unsigned char  *PORTA      = (unsigned char*)  0x22;   //on-off: digital 22 (port a:0)
+volatile unsigned char  *DDRA       = (unsigned char*)  0x21;   //reset: digital 23 (port a:1)
+volatile unsigned char  *PINA       = (unsigned char*)  0x20;   //LEDS: digital 26-29 (port a:4-7)
+//other pins in use:
+    //display: digital 2, 3, 4, 5, 11, 12
+    //RTC:     digital 20, 21
+    //DHT11:   digital 10
+
 
 //Initialize global variables
 int state = DISABLED;
@@ -212,9 +221,9 @@ void setup() {
     U0init(9600);                               //initialize serial
 
     //set vent button pin to INPUT
-    *ddr_k &= 0xFB;
+//    *ddr_k &= 0xFB;                        //pin name and registers have changed 
     //enable pull-up resistor on vent button
-    *port_k |= 0x04;
+//    *port_k |= 0x04;                       //pin name and registers have changed
 
     lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );  //initialize LCD
     rtc.begin();                                //initialize RTC
@@ -232,7 +241,7 @@ void loop() {
     }
 
     // vent moving loop
-    if (*pin_k & 0x04) {
+    if (*pin_k & 0x04) {                    //pin name and registers have changed
         //if vent button's pin is high
         if( timer_running == 0){
             timer_start(5000);
@@ -240,7 +249,7 @@ void loop() {
     }
 
     // vent stopping loop
-    if (!(*pin_k & 0x04)) {
+    if (!(*pin_k & 0x04)) {                 //pin name and registers have changed
         //if vent button's pin is not high
         if( timer_running == 1){
             timer_stop();
