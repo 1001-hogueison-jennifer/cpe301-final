@@ -234,7 +234,36 @@ void loop() {
     // vent moving loop
     if (*pin_k & 0x04) {
         //if vent button's pin is high
-        
+        if( timer_running == 0){
+            timer_start(5000);
+        }
+    }
+
+    // vent stopping loop
+    if (!(*pin_k & 0x04)) {
+        //if vent button's pin is not high
+        if( timer_running == 1){
+            timer_stop();
+            time_to_serial();
+        }
+    }
+
+
+    // motor moving loop
+    if (/*motor pin is high*/) {
+        //if motors pin is high
+        if( timer_running == 0){
+            timer_start(5000);
+        }
+    }
+
+    // motor stopping loop
+    if (/*motor pin no high*/) {
+        //if motors pin is not high
+        if( timer_running == 1){
+            timer_stop();
+            time_to_serial();
+        }
     }
 
     //update display
