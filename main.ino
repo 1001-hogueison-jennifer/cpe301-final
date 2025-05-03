@@ -94,8 +94,8 @@ Requirements:
         LCD handling
         RTC module functions
         ADC and water level functions
-    NEED
         Air temperature and humidity
+    NEED
         Fan motor functions
         Vent stepper motor functions
         Main
@@ -144,14 +144,17 @@ volatile unsigned char  *PINH       = (unsigned char*)  0x100;
 volatile unsigned char  *PORTC      = (unsigned char*)  0x28;   //stepper motor buttons:
 volatile unsigned char  *DDRC       = (unsigned char*)  0x27;       //digital 37 (port c:0) 
 volatile unsigned char  *PINC       = (unsigned char*)  0x26;       //digital 36 (port c:1)
-    //Motor
+    //Fan Motor
 volatile unsigned char  *PORTL      = (unsigned char*)  0x10B;  //motor: digital 49 (port l:0)
 volatile unsigned char  *DDRL       = (unsigned char*)  0x10A;
 volatile unsigned char  *PINL       = (unsigned char*)  0x109;
     //buttons and LEDs
-volatile unsigned char  *PORTA      = (unsigned char*)  0x22;   //on-off: digital 22 (port a:0)
+volatile unsigned char  *PORTA      = (unsigned char*)  0x22;
 volatile unsigned char  *DDRA       = (unsigned char*)  0x21;   //reset: digital 23 (port a:1)
 volatile unsigned char  *PINA       = (unsigned char*)  0x20;   //LEDS: digital 26-29 (port a:4-7)
+volatile unsigned char  *PORTD      = (unsigned char*)  0x2B;   //power button: digital 19 (port d:2)
+volatile unsigned char  *DDRD       = (unsigned char*)  0x2A;
+volatile unsigned char  *PIND       = (unsigned char*)  0x29;
 //other pins in use:
     //display: digital 2, 3, 4, 5, 11, 12
     //RTC:     digital 20, 21
@@ -193,6 +196,7 @@ float temperature = 0.0;
     //fan
 float temperature_threshold = 25.0;
 int water_low_threshold = 100;
+const byte interruptPin = 19;
 
 //Function prototypes
     //serial
@@ -213,6 +217,8 @@ void display_update();
 void time_to_serial();
     //DHT11
 void readHumiTemp( float* humi, float* temp );
+    //power button
+void power();
 
     //vent stepper motor
 Stepper ventStepper(12, 3, 4);
@@ -223,23 +229,29 @@ void setup() {
     adc_init();                                 //initialize ADC
     timer_setup();                              //initialize timer
     U0init(9600);                               //initialize serial
+    lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );  //initialize LCD
+    rtc.begin();                                //initialize RTC
+    dht11.begin();                              //initialize DHT11
 
     ventStepper.setSpeed(1);
     int ventCount = 0;
 
+    *DDRA &= 0xFD;                      //set reset button pin to INPUT
+    *PORTA |= 0x02;                     //enable pull-up resistor on reset button
+    *DDRD &= 0xFB;                      //set power button pin to INPUT
+    *PORTD |= 0x04;                     //enable pull-up resistor on power button
+    *DDRL |= 0x01;                      //set fan motor to OUTPUT
+    *DDRA |= 0x10;                      //set yellow LED to OUTPUT
+    *DDRA |= 0x20;                      //set green LED to OUTPUT
+    *DDRA |= 0x40;                      //set blue LED to OUTPUT
+    *DDRA |= 0x80;                      //set red LED to OUTPUT
 
-    //set vent button pin to INPUT
-//    *ddr_k &= 0xFB;                        //pin name and registers have changed 
-    //enable pull-up resistor on vent button
-//    *port_k |= 0x04;                       //pin name and registers have changed
-
-    lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );  //initialize LCD
-    rtc.begin();                                //initialize RTC
-    dht11.begin();                              //initialize DHT11
+    attachInterrupt(digitalPinToInterrupt( interruptPin ), power, RISING );
 }
 
 //Arduino loop function
 void loop() {
+    //update temperature and humidity
     unsigned long current_millis = millis();
     if ( current_millis - previous_millis >= interval ) {
         previous_millis = current_millis;
@@ -249,26 +261,11 @@ void loop() {
     }
 
     // vent moving loop
-    if (*PINC & 0x04) {                    //pin name and registers have changed
-        //if vent button's pin is high and its not at the highest point
-        if(ventCount < 6){
-            if( timer_running == 0){
-                timer_start(5000);
-            }
-            ventStepper.step(1);
+    if (*pin_k & 0x04) {                    //pin name and registers have changed
+        //if vent button's pin is high
+        if( timer_running == 0){
+            timer_start(5000);
         }
-
-    }
-
-    if (*DDRC & 0x04) {                    //pin name and registers have changed
-        //if vent button's pin is high and its not at the lowest point
-        if(ventCount > 1){
-            if( timer_running == 0){
-                timer_start(5000);
-            }
-            ventStepper.step(-1);
-        }
-
     }
 
     // vent stopping loop
@@ -297,6 +294,58 @@ void loop() {
             time_to_serial();
         }
     }
+
+    //state machine
+    if (state == DISABLED) {
+        //ensure fan is stopped
+        *PORTL &= 0xFE;
+
+        *PORTA |= 0x10;         //drive b:4 high (yellow LED)
+        *PORTA &= 0x1F;         //drive b:5-7 low
+    }
+
+    if (state == IDLE) {
+        if (temperature > temperature_threshold ) {
+            state == RUNNING;
+            //start the fan
+            *PORTL |= 0x01;
+            if ( adc_read(adc_channel) < water_low_threshold) {
+                state == ERROR;
+            }
+    
+            *PORTA |= 0x20;         //drive b:5 high (green LED)
+            *PORTA &= 0x2F;         //drive b:4, 6-7 low
+        }
+    
+        if (state == RUNNING) {
+            if (temperature < temperature_threshold ) {
+                state == IDLE;
+                //stop the fan
+                *PORTL &= 0xFE;
+            }
+            if ( adc_read(adc_channel) < water_low_threshold ) {
+                state == ERROR;
+            }
+    
+            *PORTA |= 0x40;         //drive b:6 high (blue LED)
+            *PORTA &= 0x4F;         //dribe b:4-5, 7 low
+        }
+    
+        if (state == ERROR) {
+            //ensure fan is stopped
+            *PORTL &= 0xFE;
+    
+            //check for reset button
+            if ( *PORTA && 0x02 ) {
+                if ( adc_read(adc_channel) > water_low_threshold ) {
+                    state == IDLE;
+                }
+            }
+    
+            *PORTA |= 0x80;         //drive b:7 high (red LED)
+            *PORTA &= 0x8F;         //drive b:4-6 low
+        }
+    
 
     //update display
     display_update();
@@ -530,4 +579,16 @@ ISR( TIMER1_OVF_vect ) {
     *TCCR1B |= 0x01;
     
     // add functions to perform when timer overflows here
+}
+
+/*
+    void power();
+    Power button interrupt service routine
+*/
+void power() {
+    if (state == DISABLED) {
+        state == IDLE;
+    } else {
+        state == DISABLED;
+    }
 }
