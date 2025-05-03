@@ -106,6 +106,7 @@ Requirements:
 #include <Keypad.h>
 #include <RTClib.h>
 #include <DHT.h>
+#include <Stepper.h>
 
 //Initialize macro definitions
 #define DISABLED 0
@@ -213,12 +214,19 @@ void time_to_serial();
     //DHT11
 void readHumiTemp( float* humi, float* temp );
 
+    //vent stepper motor
+Stepper ventStepper(12, 3, 4);
+
 
 //Arduino init function
 void setup() {
     adc_init();                                 //initialize ADC
     timer_setup();                              //initialize timer
     U0init(9600);                               //initialize serial
+
+    ventStepper.setSpeed(1);
+    int ventCount = 0;
+
 
     //set vent button pin to INPUT
 //    *ddr_k &= 0xFB;                        //pin name and registers have changed 
@@ -241,11 +249,26 @@ void loop() {
     }
 
     // vent moving loop
-    if (*pin_k & 0x04) {                    //pin name and registers have changed
-        //if vent button's pin is high
-        if( timer_running == 0){
-            timer_start(5000);
+    if (*PINC & 0x04) {                    //pin name and registers have changed
+        //if vent button's pin is high and its not at the highest point
+        if(ventCount < 6){
+            if( timer_running == 0){
+                timer_start(5000);
+            }
+            ventStepper.step(1);
         }
+
+    }
+
+    if (*DDRC & 0x04) {                    //pin name and registers have changed
+        //if vent button's pin is high and its not at the lowest point
+        if(ventCount > 1){
+            if( timer_running == 0){
+                timer_start(5000);
+            }
+            ventStepper.step(-1);
+        }
+
     }
 
     // vent stopping loop
