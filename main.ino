@@ -309,42 +309,43 @@ void loop() {
             state == RUNNING;
             //start the fan
             *PORTL |= 0x01;
-            if ( adc_read(adc_channel) < water_low_threshold) {
-                state == ERROR;
-            }
-    
-            *PORTA |= 0x20;         //drive b:5 high (green LED)
-            *PORTA &= 0x2F;         //drive b:4, 6-7 low
+        }
+        if ( adc_read(adc_channel) < water_low_threshold) {
+            state == ERROR;
         }
     
-        if (state == RUNNING) {
-            if (temperature < temperature_threshold ) {
-                state == IDLE;
-                //stop the fan
-                *PORTL &= 0xFE;
-            }
-            if ( adc_read(adc_channel) < water_low_threshold ) {
-                state == ERROR;
-            }
+        *PORTA |= 0x20;         //drive b:5 high (green LED)
+        *PORTA &= 0x2F;         //drive b:4, 6-7 low
+    }
     
-            *PORTA |= 0x40;         //drive b:6 high (blue LED)
-            *PORTA &= 0x4F;         //dribe b:4-5, 7 low
-        }
-    
-        if (state == ERROR) {
-            //ensure fan is stopped
+    if (state == RUNNING) {
+        if (temperature < temperature_threshold ) {
+            state == IDLE;
+            //stop the fan
             *PORTL &= 0xFE;
-    
-            //check for reset button
-            if ( *PORTA && 0x02 ) {
-                if ( adc_read(adc_channel) > water_low_threshold ) {
-                    state == IDLE;
-                }
-            }
-    
-            *PORTA |= 0x80;         //drive b:7 high (red LED)
-            *PORTA &= 0x8F;         //drive b:4-6 low
         }
+        if ( adc_read(adc_channel) < water_low_threshold ) {
+            state == ERROR;
+        }
+    
+        *PORTA |= 0x40;         //drive b:6 high (blue LED)
+        *PORTA &= 0x4F;         //dribe b:4-5, 7 low
+    }
+    
+    if (state == ERROR) {
+        //ensure fan is stopped
+        *PORTL &= 0xFE;
+    
+        //check for reset button
+        if ( *PORTA && 0x02 ) {
+            if ( adc_read(adc_channel) > water_low_threshold ) {
+                state == IDLE;
+            }
+        }
+    
+        *PORTA |= 0x80;         //drive b:7 high (red LED)
+        *PORTA &= 0x8F;         //drive b:4-6 low
+    }
     
 
     //update display
