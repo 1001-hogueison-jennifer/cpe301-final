@@ -103,7 +103,6 @@ Requirements:
 
 //Library includes
 #include <LiquidCrystal.h>
-#include <Keypad.h>
 #include <RTClib.h>
 #include <DHT.h>
 #include <Stepper.h>
@@ -120,41 +119,41 @@ Requirements:
 
 //Initialize global registers
     //serial
-volatile unsigned char  *UCSR0A     = (unsigned char *) 0xC0;   //USB, no pin-out
-volatile unsigned char  *UCSR0B     = (unsigned char *) 0xC1;
-volatile unsigned char  *UCSR0C     = (unsigned char *) 0xC2;
-volatile unsigned int   *UBRR0      = (unsigned int *)  0xC4;
-volatile unsigned char  *UDR0       = (unsigned char *) 0xC6;
+volatile unsigned char  *_UCSR0A     = (unsigned char *) 0x00C0;   //USB, no pin-out
+volatile unsigned char  *_UCSR0B     = (unsigned char *) 0x00C1;
+volatile unsigned char  *_UCSR0C     = (unsigned char *) 0x00C2;
+volatile unsigned int   *_UBRR0      = (unsigned int *)  0x00C4;
+volatile unsigned char  *_UDR0       = (unsigned char *) 0x00C6;
     //ADC
-volatile unsigned char  *ADMUX      = (unsigned char*)  0x7C;   //port f:0 (pin A0)
-volatile unsigned char  *ADCSRB     = (unsigned char*)  0x7B;
-volatile unsigned char  *ADCSRA     = (unsigned char*)  0x7A;
-volatile unsigned int   *ADC_DATA   = (unsigned int*)   0x78;
+volatile unsigned char  *_ADMUX      = (unsigned char*)  0x7C;   //port f:0 (pin A0)
+volatile unsigned char  *_ADCSRB     = (unsigned char*)  0x7B;
+volatile unsigned char  *_ADCSRA     = (unsigned char*)  0x7A;
+volatile unsigned int   *_ADC_DATA   = (unsigned int*)   0x78;
     //timer
-volatile unsigned char  *TIFR1      = (unsigned char*)  0x36;   //no pin-out
-volatile unsigned char  *TIMSK1     = (unsigned char*)  0x6F;
-volatile unsigned char  *TCCR1A     = (unsigned char*)  0x80;
-volatile unsigned char  *TCCR1B     = (unsigned char*)  0x81;
-volatile unsigned char  *TCCR1C     = (unsigned char*)  0x82;
-volatile unsigned int   *TCNT1      = (unsigned int*)   0x84;
+volatile unsigned char  *_TIFR1      = (unsigned char*)  0x36;   //no pin-out
+volatile unsigned char  *_TIMSK1     = (unsigned char*)  0x6F;
+volatile unsigned char  *_TCCR1A     = (unsigned char*)  0x80;
+volatile unsigned char  *_TCCR1B     = (unsigned char*)  0x81;
+volatile unsigned char  *_TCCR1C     = (unsigned char*)  0x82;
+volatile unsigned int   *_TCNT1      = (unsigned int*)   0x84;
     //Vent
-volatile unsigned char  *PORTH      = (unsigned char*)  0x102;  //digital 6 - 9 (port h:3-6)
-volatile unsigned char  *DDRH       = (unsigned char*)  0x101;  //uses library
-volatile unsigned char  *PINH       = (unsigned char*)  0x100;
-volatile unsigned char  *PORTC      = (unsigned char*)  0x28;   //stepper motor buttons:
-volatile unsigned char  *DDRC       = (unsigned char*)  0x27;       //digital 37 (port c:0) 
-volatile unsigned char  *PINC       = (unsigned char*)  0x26;       //digital 36 (port c:1)
+volatile unsigned char  *_PORTH      = (unsigned char*)  0x102;  //digital 6 - 9 (port h:3-6)
+volatile unsigned char  *_DDRH       = (unsigned char*)  0x101;  //uses library
+volatile unsigned char  *_PINH       = (unsigned char*)  0x100;
+volatile unsigned char  *_PORTC      = (unsigned char*)  0x28;   //stepper motor buttons:
+volatile unsigned char  *_DDRC       = (unsigned char*)  0x27;       //digital 37 (port c:0) 
+volatile unsigned char  *_PINC       = (unsigned char*)  0x26;       //digital 36 (port c:1)
     //Fan Motor
-volatile unsigned char  *PORTL      = (unsigned char*)  0x10B;  //motor: digital 49 (port l:0)
-volatile unsigned char  *DDRL       = (unsigned char*)  0x10A;
-volatile unsigned char  *PINL       = (unsigned char*)  0x109;
+volatile unsigned char  *_PORTL      = (unsigned char*)  0x10B;  //motor: digital 49 (port l:0)
+volatile unsigned char  *_DDRL       = (unsigned char*)  0x10A;
+volatile unsigned char  *_PINL       = (unsigned char*)  0x109;
     //buttons and LEDs
-volatile unsigned char  *PORTA      = (unsigned char*)  0x22;
-volatile unsigned char  *DDRA       = (unsigned char*)  0x21;   //reset: digital 23 (port a:1)
-volatile unsigned char  *PINA       = (unsigned char*)  0x20;   //LEDS: digital 26-29 (port a:4-7)
-volatile unsigned char  *PORTD      = (unsigned char*)  0x2B;   //power button: digital 19 (port d:2)
-volatile unsigned char  *DDRD       = (unsigned char*)  0x2A;
-volatile unsigned char  *PIND       = (unsigned char*)  0x29;
+volatile unsigned char  *_PORTA      = (unsigned char*)  0x22;
+volatile unsigned char  *_DDRA       = (unsigned char*)  0x21;   //reset: digital 23 (port a:1)
+volatile unsigned char  *_PINA       = (unsigned char*)  0x20;   //LEDS: digital 26-29 (port a:4-7)
+volatile unsigned char  *_PORTD      = (unsigned char*)  0x2B;   //power button: digital 19 (port d:2)
+volatile unsigned char  *_DDRD       = (unsigned char*)  0x2A;
+volatile unsigned char  *_PIND       = (unsigned char*)  0x29;
 //other pins in use:
     //display: digital 2, 3, 4, 5, 11, 12
     //RTC:     digital 20, 21
@@ -185,18 +184,22 @@ int lcd_x_max = 15;
 int lcd_y_min = 0;
 int lcd_y_max = 1;
     //RTC
-RTC_DS3231 rtc;
+RTC_DS1307 rtc;
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
     //humidity/temp sensor
 DHT dht11( DHT11_PIN, DHT11 );
-const long interval = 60000;        //60 second interval for humidity sensor
+const long interval = 6000;        //60 second interval for humidity sensor
 unsigned long previous_millis = 0;
 float humidity = 0.0;
 float temperature = 0.0;
+int adc_channel = 0;
     //fan
 float temperature_threshold = 25.0;
 int water_low_threshold = 100;
 const byte interruptPin = 19;
+    //stepper motor
+int ventCount = 0;
+
 
 //Function prototypes
     //serial
@@ -231,20 +234,22 @@ void setup() {
     U0init(9600);                               //initialize serial
     lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );  //initialize LCD
     rtc.begin();                                //initialize RTC
+    if (!rtc.isrunning()) {
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    }
     dht11.begin();                              //initialize DHT11
 
     ventStepper.setSpeed(1);
-    int ventCount = 0;
 
-    *DDRA &= 0xFD;                      //set reset button pin to INPUT
-    *PORTA |= 0x02;                     //enable pull-up resistor on reset button
-    *DDRD &= 0xFB;                      //set power button pin to INPUT
-    *PORTD |= 0x04;                     //enable pull-up resistor on power button
-    *DDRL |= 0x01;                      //set fan motor to OUTPUT
-    *DDRA |= 0x10;                      //set yellow LED to OUTPUT
-    *DDRA |= 0x20;                      //set green LED to OUTPUT
-    *DDRA |= 0x40;                      //set blue LED to OUTPUT
-    *DDRA |= 0x80;                      //set red LED to OUTPUT
+    *_DDRA &= 0xFD;                      //set reset button pin to INPUT
+    *_PORTA |= 0x02;                     //enable pull-up resistor on reset button
+    *_DDRD &= 0xFB;                      //set power button pin to INPUT
+    *_PORTD |= 0x04;                     //enable pull-up resistor on power button
+    *_DDRL |= 0x01;                      //set fan motor to OUTPUT
+    *_DDRA |= 0x10;                      //set yellow LED to OUTPUT
+    *_DDRA |= 0x20;                      //set green LED to OUTPUT
+    *_DDRA |= 0x40;                      //set blue LED to OUTPUT
+    *_DDRA |= 0x80;                      //set red LED to OUTPUT
 
     attachInterrupt(digitalPinToInterrupt( interruptPin ), power, RISING );
 }
@@ -258,93 +263,79 @@ void loop() {
         if ( state != DISABLED ) {
             readHumiTemp( &humidity, &temperature );
         }
+        time_to_serial();
     }
 
-    // vent moving loop
-    if (*pin_k & 0x04) {                    //pin name and registers have changed
-        //if vent button's pin is high
-        if( timer_running == 0){
-            timer_start(5000);
+    //vent moving loop
+    if (*_PINC & 0x04) {
+      //if vent button's poin is high and it's not at the highest point
+      if ( ventCount < 6 ) {
+        if (timer_running == 0) {
+          timer_start(5000);
         }
+        ventStepper.step(1);
+      }
     }
-
-    // vent stopping loop
-    if (!(*pin_k & 0x04)) {                 //pin name and registers have changed
-        //if vent button's pin is not high
-        if( timer_running == 1){
-            timer_stop();
-            time_to_serial();
+    if (*_DDRC & 0x04) {
+      //if vent button's pin is high and it's not at the lowest point
+      if (ventCount > 1) {
+        if (timer_running == 0) {
+          timer_start(5000);
         }
-    }
-
-
-    // motor moving loop
-    if (/*motor pin is high*/) {
-        //if motors pin is high
-        if( timer_running == 0){
-            timer_start(5000);
-        }
-    }
-
-    // motor stopping loop
-    if (/*motor pin no high*/) {
-        //if motors pin is not high
-        if( timer_running == 1){
-            timer_stop();
-            time_to_serial();
-        }
+        ventStepper.step(-1);
+      }
     }
 
     //state machine
     if (state == DISABLED) {
         //ensure fan is stopped
-        *PORTL &= 0xFE;
+        *_PORTL &= 0xFE;
 
-        *PORTA |= 0x10;         //drive b:4 high (yellow LED)
-        *PORTA &= 0x1F;         //drive b:5-7 low
+        *_PORTA |= 0x10;         //drive b:4 high (yellow LED)
+        *_PORTA &= 0x1F;         //drive b:5-7 low
     }
 
     if (state == IDLE) {
         if (temperature > temperature_threshold ) {
-            state == RUNNING;
+            state = RUNNING;
             //start the fan
-            *PORTL |= 0x01;
+            *_PORTL |= 0x01;
         }
         if ( adc_read(adc_channel) < water_low_threshold) {
-            state == ERROR;
+            state = ERROR;
         }
     
-        *PORTA |= 0x20;         //drive b:5 high (green LED)
-        *PORTA &= 0x2F;         //drive b:4, 6-7 low
+        *_PORTA |= 0x20;         //drive b:5 high (green LED)
+        *_PORTA &= 0x2F;         //drive b:4, 6-7 low
     }
     
     if (state == RUNNING) {
         if (temperature < temperature_threshold ) {
-            state == IDLE;
+            state = IDLE;
             //stop the fan
-            *PORTL &= 0xFE;
+            *_PORTL &= 0xFE;
         }
         if ( adc_read(adc_channel) < water_low_threshold ) {
-            state == ERROR;
+            state = ERROR;
         }
     
-        *PORTA |= 0x40;         //drive b:6 high (blue LED)
-        *PORTA &= 0x4F;         //dribe b:4-5, 7 low
+        *_PORTA |= 0x40;         //drive b:6 high (blue LED)
+        *_PORTA &= 0x4F;         //dribe b:4-5, 7 low
     }
     
     if (state == ERROR) {
         //ensure fan is stopped
-        *PORTL &= 0xFE;
+        *_PORTL &= 0xFE;
     
         //check for reset button
-        if ( *PORTA && 0x02 ) {
+        if ( *_PORTA & 0x02 ) {
             if ( adc_read(adc_channel) > water_low_threshold ) {
-                state == IDLE;
+                state = IDLE;
             }
         }
     
-        *PORTA |= 0x80;         //drive b:7 high (red LED)
-        *PORTA &= 0x8F;         //drive b:4-6 low
+        *_PORTA |= 0x80;         //drive b:7 high (red LED)
+        *_PORTA &= 0x8F;         //drive b:4-6 low
     }
     
 
@@ -361,11 +352,11 @@ void loop() {
 */
 void U0init( int U0baud ) {
     unsigned int tbaud;
-    tbaud = (FCPU / 16 / U0baud - 1);
-    *UCSR0A = 0x20;     //set 7:0 to 00100000
-    *UCSR0B = 0x18;     //set 7:0 to 00011000
-    *UCSR0C = 0x06;     //set 7:0 to 00000110
-    *UBRR0  = tbaud;
+    tbaud = (FCPU / 16 / U0baud) - 1;
+    *_UCSR0A = 0x20;     //set 7:0 to 00100000
+    *_UCSR0B = 0x18;     //set 7:0 to 00011000
+    *_UCSR0C = 0x06;     //set 7:0 to 00000110
+    *_UBRR0  = tbaud;
 }
 
 /*
@@ -373,7 +364,7 @@ void U0init( int U0baud ) {
     Returns whether or not the RDA bit in UCSR0A is set
 */
 unsigned char U0kbhit() {
-    return *UCSR0A & RDA;
+    return *_UCSR0A & RDA;
 }
 
 /*
@@ -381,7 +372,7 @@ unsigned char U0kbhit() {
     Returns a char received over serial in UDR0
 */
 unsigned char U0getchar() {
-    return *UDR0;
+    return *_UDR0;
 }
 
 /* 
@@ -390,10 +381,10 @@ unsigned char U0getchar() {
     in the UDR0 register to be sent over serial 
 */
 void U0putchar( unsigned char U0pdata ) {
-    while ( (*UCSR0A & TBE) == 0 ) {
+    while ( (*_UCSR0A & TBE) == 0 ) {
         //wait
     }
-    *UDR0 = U0pdata;
+    *_UDR0 = U0pdata;
 }
 
 /*
@@ -401,18 +392,18 @@ void U0putchar( unsigned char U0pdata ) {
     Initializes using the ADC to monitor analog data
 */
 void adc_init() {
-    *ADCSRA |= 0x80;    //set bit 7
-    *ADCSRA &= 0xDF;    //clear bit 5
-    *ADCSRA &= 0xF7;    //clear bit 3
-    *ADCSRA &= 0xF8;    //clear bits 2:0
+    *_ADCSRA |= 0x80;    //set bit 7
+    *_ADCSRA &= 0xDF;    //clear bit 5
+    *_ADCSRA &= 0xF7;    //clear bit 3
+    *_ADCSRA &= 0xF8;    //clear bits 2:0
 
-    *ADCSRB &= 0xF7;    //clear bit 3
-    *ADCSRB &= 0xF8;    //clear bits 2:0
+    *_ADCSRB &= 0xF7;    //clear bit 3
+    *_ADCSRB &= 0xF8;    //clear bits 2:0
 
-    *ADMUX  &= 0x7F;    //clear bit 7
-    *ADMUX  |= 0x40;    //set bit 6
-    *ADMUX  &= 0xDF;    //clear bit 5
-    *ADMUX  &= 0xE0;    //clear bits 4:0
+    *_ADMUX  &= 0x7F;    //clear bit 7
+    *_ADMUX  |= 0x40;    //set bit 6
+    *_ADMUX  &= 0xDF;    //clear bit 5
+    *_ADMUX  &= 0xE0;    //clear bits 4:0
 }
 
 /*
@@ -421,41 +412,41 @@ void adc_init() {
     Receives data from the ADC and returns it
 */
 unsigned int adc_read( unsigned char adc_channel_num ) {
-    *ADMUX  &= 0xE0;    //clear bits 4:0
-    *ADCSRB &= 0xF7;    //clear bit 3
+    *_ADMUX  &= 0xE0;    //clear bits 4:0
+    *_ADCSRB &= 0xF7;    //clear bit 3
 
     //set bits for ADMUX based on selected channel
     switch (adc_channel_num) {
         case '0': {
-            *ADMUX |= 0x00;
+            *_ADMUX |= 0x00;
             break;
         }
         case '1': {
-            *ADMUX |= 0x01;
+            *_ADMUX |= 0x01;
             break;
         }
         case '2': {
-            *ADMUX |= 0x02;
+            *_ADMUX |= 0x02;
             break;
         }
         case '3': {
-            *ADMUX |= 0x03;
+            *_ADMUX |= 0x03;
             break;
         }
         case '4': {
-            *ADMUX |= 0x04;
+            *_ADMUX |= 0x04;
             break;
         }
         case '5': {
-            *ADMUX |= 0x05;
+            *_ADMUX |= 0x05;
             break;
         }
         case '6': {
-            *ADMUX |= 0x06;
+            *_ADMUX |= 0x06;
             break;
         }
         case '7': {
-            *ADMUX |= 0x07;
+            *_ADMUX |= 0x07;
             break;
         }
         default: {
@@ -463,9 +454,9 @@ unsigned int adc_read( unsigned char adc_channel_num ) {
         }
     }
  
-    *ADCSRA |= 0x40;    //set bit 6
+    *_ADCSRA |= 0x40;    //set bit 6
 
-    while ( (*ADCSRA & 0x40) != 0 ) {
+    while ( (*_ADCSRA & 0x40) != 0 ) {
         //wait
     }
 
@@ -480,11 +471,11 @@ unsigned int adc_read( unsigned char adc_channel_num ) {
     Initializes registers to use the timer with interrupts
 */
 void timer_setup() {
-    *TCCR1A = 0x00;
-    *TCCR1B = 0x00;
-    *TCCR1C = 0x00;
-    *TIFR1 |= 0x01;
-    *TIMSK1 |= 0x01;
+    *_TCCR1A = 0x00;
+    *_TCCR1B = 0x00;
+    *_TCCR1C = 0x00;
+    *_TIFR1 |= 0x01;
+    *_TIMSK1 |= 0x01;
 }
 
 /*
@@ -493,10 +484,10 @@ void timer_setup() {
 */
 void timer_start( unsigned int ticks ) {
     currentTicks = (unsigned int) ticks;
-    *TCCR1B &= 0xF8;            //stop current timer
-    *TCNT1 = (unsigned int) (65535 - (unsigned long) (currentTicks) );
-    *TCCR1C &= 0x1F;
-    *TCCR1B |= 0x01;            //start timer
+    *_TCCR1B &= 0xF8;            //stop current timer
+    *_TCNT1 = (unsigned int) (65535 - (unsigned long) (currentTicks) );
+    *_TCCR1C &= 0x1F;
+    *_TCCR1B |= 0x01;            //start timer
     timer_running = 1;
 }
 
@@ -505,9 +496,9 @@ void timer_start( unsigned int ticks ) {
     Stops the timer and resets any overflow state
 */
 void timer_stop() {
-    *TCCR1B &= 0xF8;
-    if ( ( *TIFR1 & 0x01 ) == 1 ) {
-        *TIFR1 |= 0x01;
+    *_TCCR1B &= 0xF8;
+    if ( ( *_TIFR1 & 0x01 ) == 1 ) {
+        *_TIFR1 |= 0x01;
     }
     timer_running = 0;
     currentTicks = 65535;
@@ -518,11 +509,15 @@ void timer_stop() {
     Prints a string containing the current timestamp to the serial monitor one character at a time
 */
 void time_to_serial() {
-    DateTime now = rtc.now();
-    char date_string[] = now.toString( "DDD, DD MMM YYYY hh:mm:ss" );
-    int n = sizeof( date_string ) / sizeof( date_string[0] );
+    char date_string[] = "DDD, DD MMM YYYY hh:mm:ss\n";
+    int len = sizeof( date_string ) / sizeof( date_string[0] );
     for (int i = 0; i < len; i++) {
-        U0putchar( date_string[i] );
+      DateTime current_time = rtc.now();
+      char buffer_char = current_time.toString( date_string )[i];
+      while ( (*_UCSR0A & TBE) == 0 ) {
+        //wait
+      }
+      U0putchar( buffer_char );
     }
 }
 
@@ -572,12 +567,12 @@ void readHumiTemp( float* humi, float* temp ) {
     Timer overflow interrupt service routine.
 */
 ISR( TIMER1_OVF_vect ) {
-    *TCCR1B &= 0xF8;          //stop current timer
+    *_TCCR1B &= 0xF8;          //stop current timer
 
     // from lab 8, performs timer restart for currentTicks. change as needed.
-    *TCNT1 = (unsigned int) (65535 - (unsigned long) (currentTicks) );
-    *TCCR1C &= 0x1F;
-    *TCCR1B |= 0x01;
+    *_TCNT1 = (unsigned int) (65535 - (unsigned long) (currentTicks) );
+    *_TCCR1C &= 0x1F;
+    *_TCCR1B |= 0x01;
     
     // add functions to perform when timer overflows here
 }
