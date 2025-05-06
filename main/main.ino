@@ -103,9 +103,11 @@ Requirements:
 
 //Library includes
 #include <LiquidCrystal.h>
+#include <Wire.h>
 #include <RTClib.h>
 #include <DHT.h>
 #include <Stepper.h>
+#include <Adafruit_Sensor.h>
 
 //Initialize macro definitions
 #define DISABLED 0
@@ -114,7 +116,7 @@ Requirements:
 #define ERROR 3
 #define RDA 0x80
 #define TBE 0x20
-#define DHT11_PIN 10
+#define DHT11_PIN 42
 
 
 //Initialize global registers
@@ -157,7 +159,7 @@ volatile unsigned char  *_PIND       = (unsigned char*)  0x29;
 //other pins in use:
     //display: digital 2, 3, 4, 5, 11, 12
     //RTC:     digital 20, 21
-    //DHT11:   digital 10
+    //DHT11:   digital 42
 
 
 //Initialize global variables
@@ -183,6 +185,8 @@ int lcd_x_min = 0;
 int lcd_x_max = 15;
 int lcd_y_min = 0;
 int lcd_y_max = 1;
+const long disp_interval = 1000;           //1 second interval for display refresh rate
+unsigned long prev_millis_disp = 0;
     //RTC
 RTC_DS1307 rtc;
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
@@ -192,6 +196,7 @@ const long interval = 6000;        //60 second interval for humidity sensor
 unsigned long previous_millis = 0;
 float humidity = 0.0;
 float temperature = 0.0;
+    //water sensor
 int adc_channel = 0;
     //fan
 float temperature_threshold = 25.0;
@@ -199,6 +204,7 @@ int water_low_threshold = 100;
 const byte interruptPin = 19;
     //stepper motor
 int ventCount = 0;
+Stepper ventStepper(12, 3, 4);
 
 
 //Function prototypes
@@ -223,21 +229,41 @@ void readHumiTemp( float* humi, float* temp );
     //power button
 void power();
 
-    //vent stepper motor
-Stepper ventStepper(12, 3, 4);
-
 
 //Arduino init function
 void setup() {
+    U0init(9600);                               //initialize serial
     adc_init();                                 //initialize ADC
     timer_setup();                              //initialize timer
-    U0init(9600);                               //initialize serial
     lcd.begin( lcd_x_max + 1, lcd_y_max + 1 );  //initialize LCD
-    rtc.begin();                                //initialize RTC
-    if (!rtc.isrunning()) {
-      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    }
     dht11.begin();                              //initialize DHT11
+
+    rtc.begin();
+    if (!rtc.isrunning()) {
+      char message[] = "RTC not running, setting RTC to compilation time and starting it.\n";
+      int n = sizeof( message ) / sizeof( message[0] );
+      for( int i = 0; i < n-1; i++ ) {
+          U0putchar( message[i] );
+      }
+
+      rtc.adjust(DateTime(__DATE__, __TIME__));
+    }
+
+    int checkPin = digitalPinToInterrupt( interruptPin ) ;
+    if (checkPin == -1) {
+        char message[] = "Pin doesn't work for interrupts\n";
+        int n = sizeof( message ) / sizeof( message[0] );
+        for( int i = 0; i < n-1; i++ ) {
+            U0putchar( message[i] );
+        }
+    } else {
+        char message[] = "Pin works for interrupts\n";
+        int n = sizeof( message ) / sizeof( message[0] );
+        for( int i = 0; i < n-1; i++ ) {
+            U0putchar( message[i] );
+        }
+    }
+    attachInterrupt(digitalPinToInterrupt( interruptPin ), power, RISING );
 
     ventStepper.setSpeed(1);
 
@@ -251,7 +277,6 @@ void setup() {
     *_DDRA |= 0x40;                      //set blue LED to OUTPUT
     *_DDRA |= 0x80;                      //set red LED to OUTPUT
 
-    attachInterrupt(digitalPinToInterrupt( interruptPin ), power, RISING );
 }
 
 //Arduino loop function
@@ -263,26 +288,31 @@ void loop() {
         if ( state != DISABLED ) {
             readHumiTemp( &humidity, &temperature );
         }
-        time_to_serial();
     }
 
     //vent moving loop
-    if (*_PINC & 0x04) {
-      //if vent button's poin is high and it's not at the highest point
-      if ( ventCount < 6 ) {
-        if (timer_running == 0) {
-          timer_start(5000);
+    if (state != DISABLED) {
+      if (*_PINC & 0x01) {
+        //if vent button's poin is high and it's not at the highest point
+        if ( ventCount < 6 ) {
+          if (timer_running == 0) {
+            timer_start(5000);
+            ventStepper.step(1);
+            time_to_serial();
+            ventCount++;
+          }
         }
-        ventStepper.step(1);
       }
-    }
-    if (*_DDRC & 0x04) {
-      //if vent button's pin is high and it's not at the lowest point
-      if (ventCount > 1) {
-        if (timer_running == 0) {
-          timer_start(5000);
+      if (*_PINC & 0x02) {
+        //if vent button's pin is high and it's not at the lowest point
+        if (ventCount > 1) {
+          if (timer_running == 0) {
+            timer_start(5000);
+            ventStepper.step(-1);
+            time_to_serial();
+            ventCount--;
+          }
         }
-        ventStepper.step(-1);
       }
     }
 
@@ -297,11 +327,13 @@ void loop() {
 
     if (state == IDLE) {
         if (temperature > temperature_threshold ) {
+            time_to_serial();
             state = RUNNING;
             //start the fan
             *_PORTL |= 0x01;
         }
         if ( adc_read(adc_channel) < water_low_threshold) {
+            time_to_serial();
             state = ERROR;
         }
     
@@ -310,17 +342,21 @@ void loop() {
     }
     
     if (state == RUNNING) {
+        //check for temperature threshold
         if (temperature < temperature_threshold ) {
+            time_to_serial();
             state = IDLE;
             //stop the fan
             *_PORTL &= 0xFE;
         }
+        //check for water low
         if ( adc_read(adc_channel) < water_low_threshold ) {
+            time_to_serial();
             state = ERROR;
         }
     
         *_PORTA |= 0x40;         //drive b:6 high (blue LED)
-        *_PORTA &= 0x4F;         //dribe b:4-5, 7 low
+        *_PORTA &= 0x4F;         //drive b:4-5, 7 low
     }
     
     if (state == ERROR) {
@@ -328,8 +364,9 @@ void loop() {
         *_PORTL &= 0xFE;
     
         //check for reset button
-        if ( *_PORTA & 0x02 ) {
+        if (  *_PINA & 0x02 ) {
             if ( adc_read(adc_channel) > water_low_threshold ) {
+                time_to_serial();
                 state = IDLE;
             }
         }
@@ -340,7 +377,11 @@ void loop() {
     
 
     //update display
-    display_update();
+    unsigned long curr_millis_disp = millis();
+    if ( curr_millis_disp - prev_millis_disp >= disp_interval ) {
+        prev_millis_disp = curr_millis_disp;
+        display_update();
+    }
 }
 
 
@@ -509,15 +550,15 @@ void timer_stop() {
     Prints a string containing the current timestamp to the serial monitor one character at a time
 */
 void time_to_serial() {
-    char date_string[] = "DDD, DD MMM YYYY hh:mm:ss\n";
+    char date_string[] = "DD-MM-YYYY hh:mm:ss\n";
     int len = sizeof( date_string ) / sizeof( date_string[0] );
-    for (int i = 0; i < len; i++) {
-      DateTime current_time = rtc.now();
-      char buffer_char = current_time.toString( date_string )[i];
+    DateTime current_time = rtc.now();
+    strcpy(date_string, current_time.toString( date_string ) );
+    for (int i = 0; i < len-1; i++) {
       while ( (*_UCSR0A & TBE) == 0 ) {
         //wait
       }
-      U0putchar( buffer_char );
+      U0putchar( date_string[i] );
     }
 }
 
@@ -528,18 +569,20 @@ void time_to_serial() {
 void display_update() {
     lcd.clear();
     //place any items that need to be displayed on the LCD here
-    if ( state != DISABLED && state != ERROR ) {
+    if ( state != DISABLED) {
+      if (state != ERROR ) {
         lcd.setCursor( 0, 0 );
         lcd.print( "T: " );
         lcd.print( temperature );
+        lcd.setCursor( 0, 1 );
         lcd.print( " H: " );
         lcd.print( humidity );
-    }
-    if ( state == ERROR ) {
+      } else {
         lcd.setCursor( 0, 0 );
         lcd.print( "Water level is" );
         lcd.setCursor( 0, 1 );
         lcd.print( "too low. ");
+      }
     }
 }
 
@@ -553,7 +596,7 @@ void readHumiTemp( float* humi, float* temp ) {
     if ( isnan(*humi) || isnan(*temp) ) {
         char message[] = "Could not read from DHT11 sensor\n";
         int n = sizeof( message ) / sizeof( message[0] );
-        for( int i = 0; i < n; i++ ) {
+        for( int i = 0; i < n-1; i++ ) {
             U0putchar( message[i] );
         }
     }
@@ -568,13 +611,11 @@ void readHumiTemp( float* humi, float* temp ) {
 */
 ISR( TIMER1_OVF_vect ) {
     *_TCCR1B &= 0xF8;          //stop current timer
-
-    // from lab 8, performs timer restart for currentTicks. change as needed.
-    *_TCNT1 = (unsigned int) (65535 - (unsigned long) (currentTicks) );
-    *_TCCR1C &= 0x1F;
-    *_TCCR1B |= 0x01;
-    
-    // add functions to perform when timer overflows here
+    if ( ( *_TIFR1 & 0x01 ) == 1 ) {
+        *_TIFR1 |= 0x01;
+    }
+    timer_running = 0;
+    currentTicks = 65535;
 }
 
 /*
@@ -583,8 +624,8 @@ ISR( TIMER1_OVF_vect ) {
 */
 void power() {
     if (state == DISABLED) {
-        state == IDLE;
+        state = IDLE;
     } else {
-        state == DISABLED;
+        state = DISABLED;
     }
 }
