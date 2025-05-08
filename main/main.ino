@@ -139,16 +139,16 @@ volatile unsigned char  *_TCCR1B     = (unsigned char*)  0x81;
 volatile unsigned char  *_TCCR1C     = (unsigned char*)  0x82;
 volatile unsigned int   *_TCNT1      = (unsigned int*)   0x84;
     //Vent
-volatile unsigned char  *_PORTH      = (unsigned char*)  0x102;  //digital 6 - 9 (port h:3-6)
-volatile unsigned char  *_DDRH       = (unsigned char*)  0x101;  //uses library
-volatile unsigned char  *_PINH       = (unsigned char*)  0x100;
+//volatile unsigned char  *_PORTH      = (unsigned char*)  0x102;  //digital 6 - 9 (port h:3-6)
+//volatile unsigned char  *_DDRH       = (unsigned char*)  0x101;  //uses library
+//volatile unsigned char  *_PINH       = (unsigned char*)  0x100;
 volatile unsigned char  *_PORTC      = (unsigned char*)  0x28;   //stepper motor buttons:
 volatile unsigned char  *_DDRC       = (unsigned char*)  0x27;       //digital 37 (port c:0) 
 volatile unsigned char  *_PINC       = (unsigned char*)  0x26;       //digital 36 (port c:1)
     //Fan Motor
-volatile unsigned char  *_PORTL      = (unsigned char*)  0x10B;  //motor: digital 49 (port l:0)
-volatile unsigned char  *_DDRL       = (unsigned char*)  0x10A;
-volatile unsigned char  *_PINL       = (unsigned char*)  0x109;
+volatile unsigned char  *_PORTL      = (unsigned char*)  0x10B;  //motor: enable digital 49 (port l:0)
+volatile unsigned char  *_DDRL       = (unsigned char*)  0x10A;    //forward digital 47 (port l:2)
+volatile unsigned char  *_PINL       = (unsigned char*)  0x109;    //reverse digital 46 (port l:3)
     //buttons and LEDs
 volatile unsigned char  *_PORTA      = (unsigned char*)  0x22;
 volatile unsigned char  *_DDRA       = (unsigned char*)  0x21;   //reset: digital 23 (port a:1)
@@ -164,6 +164,7 @@ volatile unsigned char  *_PIND       = (unsigned char*)  0x29;
 
 //Initialize global variables
 int state = DISABLED;
+int tts_flag = 0;
     //timer
 unsigned long FCPU = 16000000;          //CPU frequency of ATMEGA is 16 MHz
 double clk_period = 0.0000000625;       //Period of 1 clock cycle for CPU
@@ -200,11 +201,15 @@ float temperature = 0.0;
 int adc_channel = 0;
     //fan
 float temperature_threshold = 25.0;
-int water_low_threshold = 100;
+int water_low_threshold = 35;
 const byte interruptPin = 19;
     //stepper motor
 int ventCount = 0;
-Stepper ventStepper(12, 3, 4);
+int steps_per_rev = 2048;
+int step_pin1 = 6;
+int step_pin2 = 7;
+int step_pin3 = 8;
+int step_pin4 = 9;
 
 
 //Function prototypes
@@ -262,10 +267,8 @@ void setup() {
         for( int i = 0; i < n-1; i++ ) {
             U0putchar( message[i] );
         }
+        attachInterrupt(digitalPinToInterrupt( interruptPin ), power, RISING );
     }
-    attachInterrupt(digitalPinToInterrupt( interruptPin ), power, RISING );
-
-    ventStepper.setSpeed(1);
 
     *_DDRA &= 0xFD;                      //set reset button pin to INPUT
     *_PORTA |= 0x02;                     //enable pull-up resistor on reset button
@@ -277,6 +280,8 @@ void setup() {
     *_DDRA |= 0x40;                      //set blue LED to OUTPUT
     *_DDRA |= 0x80;                      //set red LED to OUTPUT
 
+    *_PORTL |= 0x04;                     //set fan motor to forward
+    *_PORTL &= 0xF7;
 }
 
 //Arduino loop function
@@ -292,26 +297,21 @@ void loop() {
 
     //vent moving loop
     if (state != DISABLED) {
-      if (*_PINC & 0x01) {
-        //if vent button's poin is high and it's not at the highest point
-        if ( ventCount < 6 ) {
-          if (timer_running == 0) {
-            timer_start(5000);
-            ventStepper.step(1);
-            time_to_serial();
-            ventCount++;
-          }
-        }
-      }
-      if (*_PINC & 0x02) {
-        //if vent button's pin is high and it's not at the lowest point
-        if (ventCount > 1) {
-          if (timer_running == 0) {
-            timer_start(5000);
-            ventStepper.step(-1);
-            time_to_serial();
-            ventCount--;
-          }
+      if (*_PINC & 0x01 && timer_running == 0) {
+        //if vent button's pin is high 
+        timer_start(50000);
+        Stepper ventStepper(steps_per_rev, step_pin1, step_pin3, step_pin2, step_pin4);
+        ventStepper.setSpeed(5);
+        ventStepper.step(50);
+        tts_flag = 1;
+      } else {
+        if (*_PINC & 0x02 && timer_running == 0) {
+          //if vent button's pin is high 
+          timer_start(50000);
+          Stepper ventStepper(steps_per_rev, step_pin1, step_pin3, step_pin2, step_pin4);
+          ventStepper.setSpeed(5);
+          ventStepper.step(-50);
+          tts_flag = 1;
         }
       }
     }
@@ -327,13 +327,14 @@ void loop() {
 
     if (state == IDLE) {
         if (temperature > temperature_threshold ) {
-            time_to_serial();
+            tts_flag = 1;
             state = RUNNING;
             //start the fan
             *_PORTL |= 0x01;
+
         }
         if ( adc_read(adc_channel) < water_low_threshold) {
-            time_to_serial();
+            tts_flag = 1;
             state = ERROR;
         }
     
@@ -344,14 +345,14 @@ void loop() {
     if (state == RUNNING) {
         //check for temperature threshold
         if (temperature < temperature_threshold ) {
-            time_to_serial();
+            tts_flag = 1;
             state = IDLE;
             //stop the fan
             *_PORTL &= 0xFE;
         }
         //check for water low
         if ( adc_read(adc_channel) < water_low_threshold ) {
-            time_to_serial();
+            tts_flag = 1;
             state = ERROR;
         }
     
@@ -364,9 +365,9 @@ void loop() {
         *_PORTL &= 0xFE;
     
         //check for reset button
-        if (  *_PINA & 0x02 ) {
+        if ( *_PINA & 0x02 ) {
             if ( adc_read(adc_channel) > water_low_threshold ) {
-                time_to_serial();
+                tts_flag = 1;
                 state = IDLE;
             }
         }
@@ -375,6 +376,11 @@ void loop() {
         *_PORTA &= 0x8F;         //drive b:4-6 low
     }
     
+    //write time to serial
+    if (tts_flag == 1) {
+      tts_flag = 0;
+      time_to_serial();
+    }
 
     //update display
     unsigned long curr_millis_disp = millis();
@@ -575,7 +581,7 @@ void display_update() {
         lcd.print( "T: " );
         lcd.print( temperature );
         lcd.setCursor( 0, 1 );
-        lcd.print( " H: " );
+        lcd.print( "H: " );
         lcd.print( humidity );
       } else {
         lcd.setCursor( 0, 0 );
@@ -625,7 +631,10 @@ ISR( TIMER1_OVF_vect ) {
 void power() {
     if (state == DISABLED) {
         state = IDLE;
+        tts_flag = 1;
     } else {
         state = DISABLED;
+        tts_flag = 1;
     }
+
 }
