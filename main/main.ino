@@ -193,7 +193,7 @@ RTC_DS1307 rtc;
 char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
     //humidity/temp sensor
 DHT dht11( DHT11_PIN, DHT11 );
-const long interval = 6000;        //60 second interval for humidity sensor
+const long interval = 60000;        //60 second interval for humidity sensor
 unsigned long previous_millis = 0;
 float humidity = 0.0;
 float temperature = 0.0;
